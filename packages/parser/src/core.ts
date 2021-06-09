@@ -1,6 +1,6 @@
 import YAML from 'js-yaml'
-import { isObject, isTruthy, objectMap } from '@antfu/utils'
-import { SlideInfo, SlideInfoBase, SlidevConfig, SlidevFeatureFlags, SlidevMarkdown } from '@slidev/types'
+import { isObject, isTruthy, objectMap, toArray, uniq } from '@antfu/utils'
+import { FontOptions, ResolvedFontOptions, SlideInfo, SlideInfoBase, SlidevConfig, SlidevFeatureFlags, SlidevMarkdown, SlidevThemeMeta } from '@slidev/types'
 import { parseAspectRatio } from './utils'
 
 export function stringify(data: SlidevMarkdown) {
@@ -89,6 +89,7 @@ export function parseSlide(raw: string): SlideInfoBase {
 export function parse(
   markdown: string,
   filepath?: string,
+  themeMeta?: SlidevThemeMeta,
 ): SlidevMarkdown {
   const lines = markdown.split(/\r?\n/g)
   const slides: SlideInfo[] = []
@@ -136,38 +137,146 @@ export function parse(
     slice(lines.length)
 
   const headmatter = slides[0]?.frontmatter || {}
-  const defaultConfig: SlidevConfig = {
-    theme: 'default',
-    title: slides[0]?.title || 'Slidev',
-    remoteAssets: true,
-    monaco: 'dev',
-    download: false,
-    info: false,
-    highlighter: 'prism',
-    colorSchema: 'auto',
-    routerMode: 'history',
-    aspectRatio: 16 / 9,
-    canvasWidth: 980,
-    selectable: false,
-    themeConfig: {},
-  }
-  const config: SlidevConfig = Object.assign(
-    defaultConfig,
-    headmatter.config || {},
-    headmatter,
-  )
-  if (config.colorSchema !== 'dark' && config.colorSchema !== 'light')
-    config.colorSchema = 'auto'
-  config.aspectRatio = parseAspectRatio(config.aspectRatio)
+  headmatter.title = headmatter.title || slides[0]?.title
+  const config = resolveConfig(headmatter, themeMeta)
+  const features = detectFeatures(markdown)
 
   return {
     raw: markdown,
     filepath,
     slides,
     config,
-    features: detectFeatures(markdown),
+    features,
     headmatter,
+    themeMeta,
   }
+}
+
+function resolveFonts(fonts: FontOptions = {}): ResolvedFontOptions {
+  const {
+    fallbacks = true,
+    italic = false,
+    provider = 'google',
+  } = fonts
+  let sans = toArray(fonts.sans).flatMap(i => i.split(/,\s*/g)).map(i => i.trim())
+  let serif = toArray(fonts.serif).flatMap(i => i.split(/,\s*/g)).map(i => i.trim())
+  let mono = toArray(fonts.mono).flatMap(i => i.split(/,\s*/g)).map(i => i.trim())
+  const weights = toArray(fonts.weights || '200,400,600').flatMap(i => i.toString().split(/,\s*/g)).map(i => i.trim())
+  const custom = toArray(fonts.custom).flatMap(i => i.split(/,\s*/g)).map(i => i.trim())
+
+  const local = toArray(fonts.local).flatMap(i => i.split(/,\s*/g)).map(i => i.trim())
+  const webfonts = fonts.webfonts
+    ? fonts.webfonts
+    : fallbacks
+      ? uniq([...sans, ...serif, ...mono, ...custom])
+      : []
+
+  webfonts.filter(i => local.includes(i))
+
+  function toQuoted(font: string) {
+    if (/^(['"]).*\1$/.test(font))
+      return font
+    return `"${font}"`
+  }
+
+  if (fallbacks) {
+    sans = uniq([
+      ...sans.map(toQuoted),
+      'ui-sans-serif',
+      'system-ui',
+      '-apple-system',
+      'BlinkMacSystemFont',
+      '"Segoe UI"',
+      'Roboto',
+      '"Helvetica Neue"',
+      'Arial',
+      '"Noto Sans"',
+      'sans-serif',
+      '"Apple Color Emoji"',
+      '"Segoe UI Emoji"',
+      '"Segoe UI Symbol"',
+      '"Noto Color Emoji"',
+    ])
+    serif = uniq([
+      ...serif.map(toQuoted),
+      'ui-serif',
+      'Georgia',
+      'Cambria',
+      '"Times New Roman"',
+      'Times',
+      'serif',
+    ])
+    mono = uniq([
+      ...mono.map(toQuoted),
+      'ui-monospace',
+      'SFMono-Regular',
+      'Menlo',
+      'Monaco',
+      'Consolas',
+      '"Liberation Mono"',
+      '"Courier New"',
+      'monospace',
+    ])
+  }
+
+  return {
+    sans,
+    serif,
+    mono,
+    webfonts,
+    provider,
+    local,
+    italic,
+    weights,
+  }
+}
+
+export function resolveConfig(headmatter: any, themeMeta: SlidevThemeMeta = {}) {
+  const themeHightlighter = ['prism', 'shiki'].includes(themeMeta.highlighter || '') ? themeMeta.highlighter as 'prism' | 'shiki' : undefined
+  const themeColorSchema = ['light', 'dark'].includes(themeMeta.colorSchema || '') ? themeMeta.colorSchema as 'light' | 'dark' : undefined
+
+  const defaultConfig: SlidevConfig = {
+    theme: 'default',
+    title: 'Slidev',
+    remoteAssets: true,
+    monaco: 'dev',
+    download: false,
+    info: false,
+    highlighter: themeHightlighter || 'prism',
+    colorSchema: themeColorSchema || 'auto',
+    routerMode: 'history',
+    aspectRatio: 16 / 9,
+    canvasWidth: 980,
+    selectable: false,
+    themeConfig: {},
+    fonts: {} as ResolvedFontOptions,
+  }
+  const config: SlidevConfig = {
+    ...defaultConfig,
+    ...themeMeta.defaults,
+    ...headmatter.config,
+    ...headmatter,
+    fonts: resolveFonts({
+      ...themeMeta.defaults?.fonts,
+      ...headmatter.config?.fonts,
+      ...headmatter?.fonts,
+    }),
+  }
+
+  if (config.colorSchema !== 'dark' && config.colorSchema !== 'light')
+    config.colorSchema = 'auto'
+  if (themeColorSchema && config.colorSchema === 'auto')
+    config.colorSchema = themeColorSchema
+  config.aspectRatio = parseAspectRatio(config.aspectRatio)
+
+  if (themeColorSchema && config.colorSchema !== themeColorSchema)
+    // eslint-disable-next-line no-console
+    console.warn(`[slidev] Color schema "${config.colorSchema}" does not supported by the theme`)
+  if (themeHightlighter && config.highlighter !== themeHightlighter)
+    // eslint-disable-next-line no-console
+    console.warn(`[slidev] Syntax highlighter "${config.highlighter}" does not supported by the theme`)
+
+  return config
 }
 
 export function mergeFeatureFlags(a: SlidevFeatureFlags, b: SlidevFeatureFlags): SlidevFeatureFlags {

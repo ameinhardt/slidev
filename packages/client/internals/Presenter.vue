@@ -13,7 +13,7 @@ import SlidesOverview from './SlidesOverview.vue'
 import NoteEditor from './NoteEditor.vue'
 import Goto from './Goto.vue'
 import SlidesShow from './SlidesShow.vue'
-import SlideWrapper from './SlideWrapper.vue'
+import SlideWrapper from './SlideWrapper'
 
 registerShortcuts()
 
@@ -22,7 +22,7 @@ useHead({
 })
 
 const tsStart = ref(Date.now())
-const { timestamp: now } = useTimestamp({
+const now = useTimestamp({
   interval: 1000,
 })
 const timer = computed(() => {
@@ -133,7 +133,7 @@ useSwipeControls(main)
 }
 
 .section-title {
-  @apply px-4 py-2 font-xl;
+  @apply px-4 py-2 text-xl;
 }
 
 .grid-container {

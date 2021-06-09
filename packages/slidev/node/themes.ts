@@ -2,6 +2,10 @@ import prompts from 'prompts'
 import { parseNi, run } from '@antfu/ni'
 import isInstalledGlobally from 'is-installed-globally'
 import { underline } from 'kolorist'
+import fs from 'fs-extra'
+import { SlidevThemeMeta } from '@slidev/types'
+import { satisfies } from 'semver'
+import { version } from '../package.json'
 import { resolveImportPath } from './utils'
 import { isPath } from './options'
 
@@ -9,13 +13,28 @@ const officialThemes: Record<string, string> = {
   'none': '',
   'default': '@slidev/theme-default',
   'seriph': '@slidev/theme-seriph',
-  'apple-basic': '@slidev/theme-apple-basic',
+  'apple-basic': '@slidev/theme-apple-banisic',
 }
 
 export function packageExists(name: string) {
   if (resolveImportPath(`${name}/package.json`))
     return true
   return false
+}
+
+export async function getThemeMeta(name: string, path: string) {
+  if (!fs.existsSync(path))
+    return {}
+
+  if (path) {
+    const { slidev = {}, engines = {} } = await fs.readJSON(path)
+
+    if (engines.slidev && !satisfies(version, engines.slidev))
+      throw new Error(`[slidev] theme "${name}" requires Slidev version range "${engines.slidev}" but found "${version}"`)
+
+    return slidev as SlidevThemeMeta
+  }
+  return undefined
 }
 
 export function resolveThemeName(name: string) {

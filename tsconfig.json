@@ -15,7 +15,7 @@
     "types": [
       "vite/client",
       "node",
-      "jest"
+      "jest",
     ],
     "paths": {
       "@slidev/client/*": ["./packages/client/*"],

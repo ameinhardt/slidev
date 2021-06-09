@@ -35,7 +35,7 @@ background: https://sli.dev/demo-cover.png
 
 ---
 
-# Page 3
+# Page 5
 
 ```html
 <div>{{$slidev.nav.currentPage}}</div>
@@ -45,7 +45,7 @@ Current Page: {{$slidev.nav.currentPage}}
 
 ---
 
-# Page 3
+# Page 6
 
 <v-clicks>
 
@@ -66,13 +66,7 @@ Current Page: {{$slidev.nav.currentPage}}
 
 ---
 
-<div>
-Hi
-</div>
-
----
-
-# Page 5
+# Page 7
 
 $$
 \begin{aligned}
@@ -80,3 +74,19 @@ $$
 &+\frac{1}{\rho} \operatorname{grad}(\boldsymbol{v} \cdot \operatorname{grad} \mu)+\frac{1}{\rho} \operatorname{rot}(\boldsymbol{v} \times \operatorname{grad} \mu)-\frac{1}{\rho} \boldsymbol{v} \Delta \mu+\boldsymbol{g}
 \end{aligned}
 $$
+
+---
+layout: two-cols
+---
+
+::right::
+
+# Right
+
+<b>Right</b>
+
+:: default ::
+
+# Left
+
+Left

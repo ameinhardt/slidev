@@ -24,7 +24,77 @@ export interface SlideInfoExtended extends SlideInfo {
   notesHTML: string
 }
 
+/**
+ * Metadata for "slidev" field in themes' package.json
+ */
+export interface SlidevThemeMeta {
+  defaults?: Partial<SlidevConfig>
+  colorSchema?: 'dark' | 'light' | 'both'
+  highlighter?: 'prism' | 'shiki' | 'both'
+}
+
 export type SlidevThemeConfig = Record<string, string | number>
+
+export type FontOptions = {
+  /**
+   * Sans serif fonts (default fonts for most text)
+   */
+  sans?: string | string[]
+  /**
+   * Serif fonts
+   */
+  serif?: string | string[]
+  /**
+   * Monospace fonts, for code blocks and etc.
+   */
+  mono?: string | string[]
+  /**
+   * Load webfonts for custom CSS (does not apply anywhere by default)
+   */
+  custom?: string | string[]
+  /**
+   * Weights for fonts
+   *
+   * @default [200, 400, 600]
+   */
+  weights?: string | (string | number)[]
+  /**
+   * Import italic fonts
+   *
+   * @default false
+   */
+  italic?: boolean
+
+  /**
+   * @default 'google'
+   */
+  provider?: 'none' | 'google'
+  /**
+   * Specify web fonts names, will detect from `sans`, `mono`, `serif` if not provided
+   */
+  webfonts?: string[]
+  /**
+   * Specify local fonts names, be excluded from webfonts
+   */
+  local?: string[]
+  /**
+   * Use fonts fallback
+   *
+   * @default true
+   */
+  fallbacks?: boolean
+}
+
+export type ResolvedFontOptions = {
+  sans: string[]
+  mono: string[]
+  serif: string[]
+  weights: string[]
+  italic: boolean
+  provider: 'none' | 'google'
+  webfonts: string[]
+  local: string[]
+}
 
 export interface SlidevConfig {
   title: string
@@ -107,6 +177,12 @@ export interface SlidevConfig {
    * @default {}
    */
   themeConfig: SlidevThemeConfig
+  /**
+   * Configure fonts for the slides and app
+   *
+   * @default {}
+   */
+  fonts: ResolvedFontOptions
 }
 
 export interface SlidevFeatureFlags {
@@ -125,4 +201,5 @@ export interface SlidevMarkdown {
 
   filepath?: string
   entries?: string[]
+  themeMeta?: SlidevThemeMeta
 }

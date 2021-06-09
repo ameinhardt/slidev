@@ -1,7 +1,8 @@
 import { basename, join } from 'path'
 import { ModuleNode, Update, ViteDevServer, Plugin } from 'vite'
-import { isString, notNullish, objectMap, range, slash } from '@antfu/utils'
+import { isString, notNullish, objectMap, range, slash, uniq } from '@antfu/utils'
 import fg from 'fast-glob'
+import fs, { existsSync } from 'fs-extra'
 import Markdown from 'markdown-it'
 import { RouteMeta } from 'vue-router'
 // @ts-expect-error
@@ -9,7 +10,7 @@ import mila from 'markdown-it-link-attributes'
 import { SlideInfo, SlideInfoExtended, SlidevMarkdown } from '@slidev/types'
 import * as parser from '@slidev/parser/fs'
 import equal from 'fast-deep-equal'
-import { existsSync } from 'fs-extra'
+
 import type { Connect } from 'vite'
 import { ResolvedSlidevOptions, SlidevPluginOptions } from '../options'
 import { resolveImportPath, stringifyMarkdownTokens, toAtFS } from '../utils'
@@ -60,12 +61,12 @@ md.use(mila, {
 function prepareSlideInfo(data: SlideInfo): SlideInfoExtended {
   return {
     ...data,
-    notesHTML: md.render(data.note || ''),
+    notesHTML: md.render(data?.note || ''),
   }
 }
 
 export function createSlidesLoader(
-  { data, entry, clientRoot, themeRoots, userRoot }: ResolvedSlidevOptions,
+  { data, entry, clientRoot, themeRoots, userRoot, roots }: ResolvedSlidevOptions,
   pluginOptions: SlidevPluginOptions,
   VuePlugin: Plugin,
   MarkdownPlugin: Plugin,
@@ -121,12 +122,14 @@ export function createSlidesLoader(
         if (!data.entries!.some(i => slash(i) === ctx.file))
           return
 
-        const newData = await parser.load(entry)
+        const newData = await parser.load(entry, data.themeMeta)
 
         const moduleIds = new Set<string>()
 
-        if (data.slides.length !== newData.slides.length)
+        if (data.slides.length !== newData.slides.length) {
           moduleIds.add('/@slidev/routes')
+          range(newData.slides.length).map(i => hmrPages.add(i))
+        }
 
         if (!equal(data.headmatter.defaults, newData.headmatter.defaults)) {
           moduleIds.add('/@slidev/routes')
@@ -225,6 +228,14 @@ export function createSlidesLoader(
         if (id === '/@slidev/configs')
           return generateConfigs()
 
+        // global component
+        if (id === '/@slidev/global-components/top')
+          return generateGlobalComponents('top')
+
+        // global component
+        if (id === '/@slidev/global-components/bottom')
+          return generateGlobalComponents('bottom')
+
         // pages
         if (id.startsWith(slidePrefix)) {
           const remaning = id.slice(slidePrefix.length)
@@ -280,8 +291,14 @@ export function createSlidesLoader(
       `const frontmatter = ${JSON.stringify(frontmatter)}`,
     ]
 
-    code = code.replace(/(<script setup.*>)/g, `$1${imports.join('\n')}\n`)
-    code = code.replace(/<template>([\s\S]*?)<\/template>/mg, '<template><InjectedLayout v-bind="frontmatter">$1</InjectedLayout></template>')
+    code = code.replace(/(<script setup.*>)/g, `$1\n${imports.join('\n')}\n`)
+    const injectA = code.indexOf('<template>') + '<template>'.length
+    const injectB = code.lastIndexOf('</template>')
+    let body = code.slice(injectA, injectB).trim()
+    if (body.startsWith('<div>') && body.endsWith('</div>'))
+      body = body.slice(5, -6)
+    code = `${code.slice(0, injectA)}\n<InjectedLayout v-bind="frontmatter">\n${body}\n</InjectedLayout>\n${code.slice(injectB)}`
+
     return code
   }
 
@@ -292,11 +309,11 @@ export function createSlidesLoader(
 
     const layouts: Record<string, string> = {}
 
-    const roots = [
+    const roots = uniq([
       userRoot,
       ...themeRoots,
       clientRoot,
-    ]
+    ])
 
     for (const root of roots) {
       const layoutPaths = await fg('layouts/*.{vue,ts}', {
@@ -324,10 +341,10 @@ export function createSlidesLoader(
       `import "${toAtFS(join(clientRoot, 'styles/index.css'))}"`,
       `import "${toAtFS(join(clientRoot, 'styles/code.css'))}"`,
     ]
-    const roots = [
+    const roots = uniq([
       ...themeRoots,
       userRoot,
-    ]
+    ])
 
     for (const root of roots) {
       const styles = [
@@ -422,5 +439,38 @@ export function createSlidesLoader(
       config.info = md.render(config.info)
 
     return `export default ${JSON.stringify(config)}`
+  }
+
+  async function generateGlobalComponents(layer: 'top' | 'bottom') {
+    const components = roots
+      .flatMap((root) => {
+        if (layer === 'top') {
+          return [
+            join(root, 'global.vue'),
+            join(root, 'global-top.vue'),
+            join(root, 'GlobalTop.vue'),
+          ]
+        }
+        else {
+          return [
+            join(root, 'global-bottom.vue'),
+            join(root, 'GlobalBottom.vue'),
+          ]
+        }
+      })
+      .filter(i => fs.existsSync(i))
+
+    const imports = components.map((i, idx) => `import __n${idx} from '${toAtFS(i)}'`).join('\n')
+    const render = components.map((i, idx) => `h(__n${idx})`).join(',')
+
+    return `
+${imports}
+import { h } from 'vue'
+export default {
+  render() {
+    return [${render}]
+  }
+}
+`
   }
 }

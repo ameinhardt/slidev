@@ -1,4 +1,4 @@
-import { resolve, dirname } from 'path'
+import { resolve, dirname, join } from 'path'
 import Vue from '@vitejs/plugin-vue'
 import ViteIcons from 'vite-plugin-icons'
 import ViteComponents from 'vite-plugin-components'
@@ -10,7 +10,7 @@ import { SlidevMarkdown } from '@slidev/types'
 import * as parser from '@slidev/parser/fs'
 import _debug from 'debug'
 import { resolveImportPath } from './utils'
-import { packageExists, promptForThemeInstallation, resolveThemeName } from './themes'
+import { getThemeMeta, packageExists, promptForThemeInstallation, resolveThemeName } from './themes'
 
 const debug = _debug('slidev:options')
 
@@ -115,6 +115,13 @@ export async function resolveOptions(
   const cliRoot = getCLIRoot()
   const themeRoots = getThemeRoots(theme, entry)
   const roots = uniq([clientRoot, ...themeRoots, userRoot])
+
+  if (themeRoots.length) {
+    const themeMeta = await getThemeMeta(theme, join(themeRoots[0], 'package.json'))
+    data.themeMeta = themeMeta
+    if (themeMeta)
+      data.config = parser.resolveConfig(data.headmatter, themeMeta)
+  }
 
   debug({
     config: data.config,

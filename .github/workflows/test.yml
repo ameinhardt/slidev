@@ -12,7 +12,8 @@ on:
       - master
 
 jobs:
-  build:
+  test:
+    timeout-minutes: 10
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -40,6 +41,8 @@ jobs:
 
       - name: Install
         run: nci
+        env:
+          CYPRESS_INSTALL_BINARY: 0
 
       - name: Build
         run: nr build
@@ -47,8 +50,9 @@ jobs:
       - name: Test
         run: nr test
 
-  lint:
+  cypress:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v2
@@ -63,6 +67,39 @@ jobs:
 
       - name: Install
         run: nci
+
+      - name: Build
+        run: nr build
+
+      - name: Hack Cypress
+        run: cp pnpm-lock.yaml package-lock.json
+
+      - name: Cypress
+        uses: cypress-io/github-action@v2
+        with:
+          install-command: echo
+          build: nr build
+          start: nr cy:fixture
+
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Use Node.js 14.x
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14.x
+
+      - name: Setup
+        run: npm i -g pnpm @antfu/ni
+
+      - name: Install
+        run: nci
+        env:
+          CYPRESS_INSTALL_BINARY: 0
 
       - name: Lint
         run: nr lint --if-present
